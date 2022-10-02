@@ -1,0 +1,119 @@
+version: '3.8'
+
+volumes:
+  meilisearch-data:
+  postgres-data:
+  redis-data:
+
+services:
+  nats:
+    container_name: nats
+    image: 'nats:2.6.1'
+    restart: on-failure
+    ports:
+      - '${NATS_PORT}:${NATS_PORT}'
+    command:
+      - '--auth'
+      - ${NATS_TOKEN}
+      - '--port'
+      - '${NATS_PORT}'
+
+  meilisearch:
+    image: 'getmeili/meilisearch:v0.22.0'
+    container_name: meilisearch
+    restart: on-failure
+    env_file:
+      - .env.${ENV}
+    volumes:
+      - meilisearch-data:/data
+    command: './meilisearch --env ${ENV} --http-addr ${MEILISEARCH_HOST}:${MEILISEARCH_PORT} --master-key ${MEILI_MASTER_KEY}'
+    ports:
+      - '${MEILISEARCH_PORT}:${MEILISEARCH_PORT}'
+
+  postgres:
+    image: 'postgres:13'
+    container_name: postgres
+    restart: on-failure
+    volumes:
+      - postgres-data:/data
+    env_file:
+      - .env.${ENV}
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_DB=${POSTGRES_DATABASE}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+    ports:
+      - '${POSTGRES_PORT}:${POSTGRES_PORT}'
+
+  redis:
+    image: redis:6
+    container_name: redis
+    restart: on-failure
+    volumes:
+      - redis-data:/data
+    env_file:
+      - .env.${ENV}
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_USER=${REDIS_USER}
+      - REDIS_DB=${REDIS_DATABASE}
+      - REDIS_PORT=${REDIS_PORT}
+    ports:
+      - '${REDIS_PORT}:${REDIS_PORT}'
+    command: >
+      --requirepass ${REDIS_PASSWORD}
+
+  upload:
+    build:
+      context: .
+      dockerfile: ./docker/development/upload.dockerfile
+    container_name: upload
+    restart: on-failure
+    env_file:
+      - .env.${ENV}
+    volumes:
+      - /base/services/upload/node_modules/
+      - ./services/upload:/base/services/upload
+    depends_on:
+      - redis
+      - nats
+    ports:
+      - '${UPLOAD_PORT}:${UPLOAD_PORT}'
+    command: bash -c "npm i && npm run start:dev"
+
+  back-end:
+    build:
+      context: .
+      dockerfile: ./docker/development/back-end.dockerfile
+    container_name: back-end
+    restart: on-failure
+    env_file:
+      - .env.${ENV}
+    volumes:
+      - /base/services/back-end/node_modules/
+      - ./services/back-end:/base/services/back-end
+    depends_on:
+      - redis
+      - postgres
+      - meilisearch
+      - nats
+    ports:
+      - '${BACKEND_PORT}:${BACKEND_PORT}'
+    command: bash -c "npm i && npm run start:dev"
+
+  front-end:
+    build:
+      context: .
+      dockerfile: ./docker/development/front-end.dockerfile
+    container_name: front-end
+    restart: on-failure
+    env_file:
+      - .env.${ENV}
+    volumes:
+      - /base/services/front-end/node_modules/
+      - ./services/front-end:/base/services/front-end
+    depends_on:
+      - back-end
+    ports:
+      - '${FRONTEND_PORT}:${FRONTEND_PORT}'
