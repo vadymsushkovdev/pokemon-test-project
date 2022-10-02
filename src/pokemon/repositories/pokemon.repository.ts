@@ -1,67 +1,20 @@
-import { CustomRepository } from '../../db/typeorm_ex.decorator';
-import {
-  Between,
-  ILike,
-  LessThanOrEqual,
-  MoreThanOrEqual,
-  Repository,
-} from 'typeorm';
-import { Pokemon } from '../entities/pokemon.entity';
-import { isNil } from '@nestjs/common/utils/shared.utils';
-import { PokemonType } from '../../enums/pokemonType';
+import { Repository } from 'typeorm';
 
-@CustomRepository(Pokemon)
-export class PokemonRepository extends Repository<Pokemon> {
-  async getByName(
-    pokemonName: string,
-    skip?: number,
-    limit?: number,
-  ): Promise<Pokemon[]> {
-    return await this.find({
-      where: {
-        name: ILike(`%${pokemonName}%`),
-      },
-      skip: skip ?? 0,
-      take: limit ?? 0,
-    });
-  }
+import { CustomRepository } from '../../common/decorators/typeorm_ex.decorator';
+import { PokemonEntity } from '../entities/pokemon.entity';
+import { SearchPokemonsWhereConditionType } from '../types/search-pokemons-where-condition.type';
 
-  async searchPokemon(
-    pokedexNumber?: number,
-    pokemonType1?: PokemonType,
-    pokemonType2?: PokemonType,
-    minStatTotal?: number,
-    maxStatTotal?: number,
-    isCrossGen?: boolean,
-    offset?: number,
-    limit?: number,
-  ): Promise<Pokemon[]> {
+@CustomRepository(PokemonEntity)
+export class PokemonRepository extends Repository<PokemonEntity> {
+  public async getList(
+    where: SearchPokemonsWhereConditionType,
+    take: number,
+    skip: number,
+  ): Promise<PokemonEntity[]> {
     return await this.find({
-      where: {
-        ...(!isNil(pokedexNumber) && { pokedexNumber: pokedexNumber }),
-        ...(!isNil(pokemonType1) && !isNil(pokemonType2)
-          ? {
-              type1: pokemonType1,
-              type2: pokemonType2,
-            }
-          : !isNil(pokemonType1) && { type1: pokemonType1 }),
-        ...(!isNil(minStatTotal) && !isNil(maxStatTotal)
-          ? {
-              statTotal: Between(minStatTotal, maxStatTotal),
-            }
-          : (!isNil(minStatTotal) && {
-              statTotal: MoreThanOrEqual(minStatTotal),
-            }) ||
-            (!isNil(maxStatTotal) && {
-              statTotal: LessThanOrEqual(maxStatTotal),
-            })),
-        ...(!isNil(isCrossGen) && { crossGen: isCrossGen }),
-      },
-      skip: offset ?? 0,
-      take: limit ?? 0,
-      order: {
-        statTotal: isNil(minStatTotal) && maxStatTotal ? 'DESC' : 'ASC',
-      },
+      where,
+      take,
+      skip,
     });
   }
 }
